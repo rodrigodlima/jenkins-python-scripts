@@ -23,9 +23,9 @@ class EnhancedJenkinsScanner:
         
         Args:
             jenkins_url: URL base do Jenkins
-            username: Usuário do Jenkins
+            username: Username do Jenkins
             token: Token de API
-            git_repos_path: Caminho opcional para repositórios Git clonados
+            git_repos_path: Path opcional para repositórios Git clonados
         """
         self.jenkins_url = jenkins_url.rstrip('/')
         self.auth = HTTPBasicAuth(username, token)
@@ -34,7 +34,7 @@ class EnhancedJenkinsScanner:
         self.git_repos_path = Path(git_repos_path) if git_repos_path else None
         
     def get_all_jobs(self, folder_path: str = "") -> List[Dict]:
-        """Obtém todos os jobs do Jenkins recursivamente"""
+        """Gets all jobs do Jenkins recursively"""
         jobs = []
         url = f"{self.jenkins_url}/{folder_path}api/json?tree=jobs[name,url,_class,jobs]"
         
@@ -53,24 +53,24 @@ class EnhancedJenkinsScanner:
                     jobs.append(job)
                     
         except Exception as e:
-            print(f"Erro ao obter jobs de {folder_path}: {str(e)}")
+            print(f"Error getting jobs de {folder_path}: {str(e)}")
             
         return jobs
     
     def get_job_config(self, job_url: str) -> str:
-        """Obtém a configuração XML do job"""
+        """Gets a configuration XML of job"""
         config_url = f"{job_url}config.xml"
         try:
             response = self.session.get(config_url, verify=True)
             response.raise_for_status()
             return response.text
         except Exception as e:
-            print(f"  ⚠ Erro ao obter config de {job_url}: {str(e)}")
+            print(f"  ⚠ Error getting config de {job_url}: {str(e)}")
             return ""
     
     def analyze_job_type(self, config_xml: str) -> Dict:
         """
-        Analisa o tipo de job e extrai informações relevantes
+        Analyzes o tipo de job e extrai informações relevantes
         """
         job_info = {
             'type': 'unknown',
@@ -84,11 +84,11 @@ class EnhancedJenkinsScanner:
         try:
             root = ET.fromstring(config_xml)
             
-            # Detecta tipo de job
+            # Detects tipo de job
             if root.tag == 'flow-definition':
                 job_info['type'] = 'pipeline'
                 
-                # Verifica se é Pipeline Script (inline)
+                # Checks se é Pipeline Script (inline)
                 definition = root.find('.//definition')
                 if definition is not None:
                     definition_class = definition.get('class', '')
@@ -102,7 +102,7 @@ class EnhancedJenkinsScanner:
                     elif 'CpsScmFlowDefinition' in definition_class:
                         job_info['scm_type'] = 'scm'
                         
-                        # Extrai informações do SCM
+                        # Extracts informações do SCM
                         scm = definition.find('.//scm')
                         if scm is not None:
                             # Git URL
@@ -110,7 +110,7 @@ class EnhancedJenkinsScanner:
                             if url_elem is not None:
                                 job_info['git_url'] = url_elem.text
                         
-                        # Caminho do Jenkinsfile
+                        # Path do Jenkinsfile
                         script_path = definition.find('.//scriptPath')
                         if script_path is not None:
                             job_info['jenkinsfile_path'] = script_path.text
@@ -118,8 +118,8 @@ class EnhancedJenkinsScanner:
             elif root.tag in ['project', 'maven2-moduleset']:
                 job_info['type'] = 'freestyle'
                 
-        except ET.ParseError as e:
-            print(f"  ⚠ Erro ao parsear XML: {str(e)}")
+        except ET.ParseErrorr as e:
+            print(f"  ⚠ Error ao parsear XML: {str(e)}")
         
         return job_info
     
@@ -130,11 +130,11 @@ class EnhancedJenkinsScanner:
         if not self.git_repos_path or not self.git_repos_path.exists():
             return None
         
-        # Extrai o nome do repositório da URL
+        # Extracts o nome do repositório da URL
         # Ex: https://github.com/empresa/repo.git -> repo
         repo_name = git_url.rstrip('/').split('/')[-1].replace('.git', '')
         
-        # Busca o repositório localmente
+        # Searches o repositório localmente
         possible_paths = [
             self.git_repos_path / repo_name / jenkinsfile_path,
             self.git_repos_path / repo_name.lower() / jenkinsfile_path,
@@ -146,13 +146,13 @@ class EnhancedJenkinsScanner:
                     with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                         return f.read()
                 except Exception as e:
-                    print(f"  ⚠ Erro ao ler {path}: {str(e)}")
+                    print(f"  ⚠ Error ao ler {path}: {str(e)}")
         
         return None
     
     def search_parameter_in_text(self, text: str, parameter_name: str) -> Dict:
         """
-        Busca parâmetro em texto (script, Jenkinsfile, etc)
+        Searches parameter em texto (script, Jenkinsfile, etc)
         """
         result = {
             'found': False,
@@ -164,11 +164,11 @@ class EnhancedJenkinsScanner:
         if not text:
             return result
         
-        # Verifica se tem bloco parameters
+        # Checks se tem bloco parameters
         if re.search(r'parameters\s*{', text):
             result['has_parameters_block'] = True
         
-        # Verifica se o parâmetro é definido
+        # Checks se o parameter é definido
         param_definition_patterns = [
             rf'string\s*\(\s*name\s*:\s*[\'\"]{parameter_name}[\'\"]',
             rf'booleanParam\s*\(\s*name\s*:\s*[\'\"]{parameter_name}[\'\"]',
@@ -181,7 +181,7 @@ class EnhancedJenkinsScanner:
                 result['defined_as_parameter'] = True
                 break
         
-        # Busca usos do parâmetro
+        # Searches usos do parameter
         usage_patterns = [
             rf'\${{?{parameter_name}}}?',
             rf'params\.{parameter_name}',
@@ -193,7 +193,7 @@ class EnhancedJenkinsScanner:
             matches = re.finditer(pattern, text)
             for match in matches:
                 result['found'] = True
-                # Extrai contexto
+                # Extracts contexto
                 start = max(0, match.start() - 80)
                 end = min(len(text), match.end() + 80)
                 context = text[start:end].replace('\n', ' ').strip()
@@ -217,21 +217,21 @@ class EnhancedJenkinsScanner:
             'job_url': job_url,
             'job_class': job.get('_class', ''),
             'found': False,
-            'sources': []  # Lista de onde o parâmetro foi encontrado
+            'sources': []  # List of onde o parameter foi encontrado
         }
         
-        print(f"  Analisando: {job_name}")
+        print(f"  Analyzesndo: {job_name}")
         
-        # 1. Obtém configuração do job
+        # 1. Gets configuration of job
         config_xml = self.get_job_config(job_url)
         if not config_xml:
             return result
         
-        # 2. Analisa tipo de job
+        # 2. Analyzes tipo de job
         job_info = self.analyze_job_type(config_xml)
         result['job_type'] = job_info['type']
         
-        # 3. Busca em parâmetros definidos no XML
+        # 3. Searches em parameters definidos in XML
         xml_param_search = self.search_parameter_in_xml(config_xml, parameter_name)
         if xml_param_search['found_in_parameters']:
             result['found'] = True
@@ -240,7 +240,7 @@ class EnhancedJenkinsScanner:
                 'type': 'definition',
                 'parameter_type': xml_param_search.get('parameter_type')
             })
-            print(f"    ✓ Encontrado em: Parâmetros do Job")
+            print(f"    ✓ Found em: Parameters do Job")
         
         # 4. Se tem script inline, busca nele
         if job_info['has_inline_script'] and job_info['inline_script']:
@@ -256,7 +256,7 @@ class EnhancedJenkinsScanner:
                     'matches': len(script_search['matches']),
                     'defined_in_script': script_search['defined_as_parameter']
                 })
-                print(f"    ✓ Encontrado em: Script Inline ({len(script_search['matches'])} usos)")
+                print(f"    ✓ Found em: Script Inline ({len(script_search['matches'])} usos)")
         
         # 5. Se usa SCM, tenta buscar o Jenkinsfile
         elif job_info['scm_type'] == 'scm' and job_info['git_url']:
@@ -283,7 +283,7 @@ class EnhancedJenkinsScanner:
                         'git_url': job_info['git_url'],
                         'file_path': result['jenkinsfile_path']
                     })
-                    print(f"    ✓ Encontrado em: Jenkinsfile do Git ({len(jenkinsfile_search['matches'])} usos)")
+                    print(f"    ✓ Found em: Jenkinsfile do Git ({len(jenkinsfile_search['matches'])} usos)")
             else:
                 # Jenkinsfile não encontrado localmente
                 result['sources'].append({
@@ -296,7 +296,7 @@ class EnhancedJenkinsScanner:
                 print(f"      Git: {job_info['git_url']}")
                 print(f"      Path: {result['jenkinsfile_path']}")
         
-        # 6. Busca também no XML completo (pode ter em outros lugares)
+        # 6. Searches também in XML completo (pode ter em outros lugares)
         if xml_param_search['found_in_script']:
             if not any(s['location'] in ['inline_script', 'jenkinsfile_from_git'] for s in result['sources']):
                 result['found'] = True
@@ -305,12 +305,12 @@ class EnhancedJenkinsScanner:
                     'type': 'usage',
                     'matches': len(xml_param_search['script_matches'])
                 })
-                print(f"    ✓ Encontrado em: Script no XML")
+                print(f"    ✓ Found em: Script in XML")
         
         return result
     
     def search_parameter_in_xml(self, config_xml: str, parameter_name: str) -> Dict:
-        """Busca parâmetro na configuração XML"""
+        """Searches parameter na configuration XML"""
         result = {
             'found_in_parameters': False,
             'found_in_script': False,
@@ -318,7 +318,7 @@ class EnhancedJenkinsScanner:
             'script_matches': []
         }
         
-        # Busca em parâmetros
+        # Searches em parameters
         param_patterns = [
             rf'<name>{parameter_name}</name>',
             rf'<hudson\.model\.\w+ParameterDefinition>.*?<name>{parameter_name}</name>',
@@ -335,7 +335,7 @@ class EnhancedJenkinsScanner:
                     result['parameter_type'] = type_match.group(1)
                 break
         
-        # Busca em scripts
+        # Searches em scripts
         script_patterns = [
             rf'\${{?{parameter_name}}}?',
             rf'params\.{parameter_name}',
@@ -354,15 +354,15 @@ class EnhancedJenkinsScanner:
         return result
     
     def scan_all_jobs(self, parameter_name: str) -> List[Dict]:
-        """Escaneia todos os jobs"""
-        print(f"🔍 Buscando '{parameter_name}' em todos os jobs do Jenkins")
+        """Escaneia all jobs"""
+        print(f"🔍 Searchesndo '{parameter_name}' em all jobs do Jenkins")
         print(f"Jenkins: {self.jenkins_url}")
         if self.git_repos_path:
             print(f"Repos Git: {self.git_repos_path}")
         print("-" * 80)
         
         all_jobs = self.get_all_jobs()
-        print(f"\n📊 Total de jobs encontrados: {len(all_jobs)}")
+        print(f"\n📊 Total jobs encontrados: {len(all_jobs)}")
         print("-" * 80)
         
         results = []
@@ -378,15 +378,15 @@ class EnhancedJenkinsScanner:
         return results
     
     def generate_enhanced_report(self, results: List[Dict], parameter_name: str, output_file: str = None):
-        """Gera relatório melhorado"""
+        """Generates report melhorado"""
         print("\n" + "=" * 80)
         print(f"📊 RELATÓRIO DETALHADO: '{parameter_name}'")
         print("=" * 80)
         
         report_lines = []
         
-        # Resumo
-        report_lines.append(f"\nTotal de jobs com '{parameter_name}': {len(results)}")
+        # Summary
+        report_lines.append(f"\nTotal jobs com '{parameter_name}': {len(results)}")
         
         # Agrupa por localização
         by_location = {}
@@ -395,18 +395,18 @@ class EnhancedJenkinsScanner:
                 loc = source['location']
                 by_location[loc] = by_location.get(loc, 0) + 1
         
-        report_lines.append("\n📍 Localizações onde o parâmetro foi encontrado:")
+        report_lines.append("\n📍 Localizações onde o parameter foi encontrado:")
         for loc, count in sorted(by_location.items(), key=lambda x: x[1], reverse=True):
             loc_names = {
-                'job_parameters': 'Parâmetros do Job',
+                'job_parameters': 'Parameters do Job',
                 'inline_script': 'Script Inline (Pipeline)',
                 'jenkinsfile_from_git': 'Jenkinsfile (do Git)',
-                'xml_script': 'Script no XML',
+                'xml_script': 'Script in XML',
                 'jenkinsfile_not_found': 'Jenkinsfile não encontrado localmente'
             }
             report_lines.append(f"  • {loc_names.get(loc, loc)}: {count} job(s)")
         
-        # Detalhes por job
+        # Details por job
         report_lines.append("\n" + "=" * 80)
         report_lines.append("DETALHES POR JOB")
         report_lines.append("=" * 80)
@@ -425,7 +425,7 @@ class EnhancedJenkinsScanner:
             for source in result['sources']:
                 loc = source['location']
                 if loc == 'job_parameters':
-                    report_lines.append(f"      ✓ Parâmetros do Job (tipo: {source.get('parameter_type', 'N/A')})")
+                    report_lines.append(f"      ✓ Parameters do Job (tipo: {source.get('parameter_type', 'N/A')})")
                 elif loc == 'inline_script':
                     defined = " [DEFINIDO NO SCRIPT]" if source.get('defined_in_script') else ""
                     report_lines.append(f"      ✓ Script Inline - {source.get('matches', 0)} uso(s){defined}")
@@ -436,7 +436,7 @@ class EnhancedJenkinsScanner:
                     report_lines.append(f"      ⚠ Jenkinsfile não encontrado localmente")
                     report_lines.append(f"        (Git: {source.get('git_url')})")
                 elif loc == 'xml_script':
-                    report_lines.append(f"      ✓ Script no XML - {source.get('matches', 0)} uso(s)")
+                    report_lines.append(f"      ✓ Script in XML - {source.get('matches', 0)} uso(s)")
         
         # Recomendações
         report_lines.append("\n" + "=" * 80)
@@ -453,38 +453,38 @@ class EnhancedJenkinsScanner:
             report_lines.append("  Sugestões:")
             report_lines.append("  1. Clone os repositórios faltantes")
             report_lines.append("  2. Execute o scanner Git separadamente")
-            report_lines.append("  3. Forneça o caminho correto com --git-repos-path")
+            report_lines.append("  3. Forneça o path correto com --git-repos-path")
         
-        # Imprime
+        # Prints
         for line in report_lines:
             print(line)
         
-        # Salva
+        # Saves
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(report_lines))
-            print(f"\n✓ Relatório salvo em: {output_file}")
+            print(f"\n✓ Report salvo em: {output_file}")
         
         json_file = output_file.replace('.txt', '.json') if output_file else 'enhanced_scan_results.json'
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
-        print(f"✓ JSON detalhado salvo em: {json_file}")
+        print(f"✓ Detailed JSON saved to: {json_file}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Scanner Jenkins Melhorado - Busca em jobs e Jenkinsfiles do Git',
+        description='Scanner Jenkins Melhorado - Searches em jobs e Jenkinsfiles do Git',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Exemplos:
+Examples:
 
-  # Busca apenas no Jenkins (sem acesso aos repos Git):
+  # Searches apenas no Jenkins (sem acesso aos repos Git):
   python enhanced_jenkins_scanner.py \\
       --jenkins-url https://jenkins.empresa.com \\
       --username user --token token \\
       --parameter ECR_PATH
 
-  # Busca no Jenkins + Jenkinsfiles locais (RECOMENDADO):
+  # Searches no Jenkins + Jenkinsfiles locais (RECOMENDADO):
   python enhanced_jenkins_scanner.py \\
       --jenkins-url https://jenkins.empresa.com \\
       --username user --token token \\
@@ -494,11 +494,11 @@ Exemplos:
     )
     
     parser.add_argument('--jenkins-url', required=True, help='URL do Jenkins')
-    parser.add_argument('--username', required=True, help='Usuário do Jenkins')
+    parser.add_argument('--username', required=True, help='Username do Jenkins')
     parser.add_argument('--token', required=True, help='Token de API')
-    parser.add_argument('--git-repos-path', help='Caminho para repos Git clonados (opcional mas recomendado)')
+    parser.add_argument('--git-repos-path', help='Path para repos Git clonados (opcional mas recomendado)')
     parser.add_argument('--parameter', default='ECR_PATH', help='Parâmetro a buscar')
-    parser.add_argument('--output', default='enhanced_jenkins_report.txt', help='Arquivo de saída')
+    parser.add_argument('--output', default='enhanced_jenkins_report.txt', help='File de saída')
     
     args = parser.parse_args()
     
@@ -518,9 +518,9 @@ Exemplos:
         print("=" * 80)
         
     except KeyboardInterrupt:
-        print("\n\n⚠ Operação cancelada")
+        print("\n\n⚠ Operation cancelled")
     except Exception as e:
-        print(f"\n❌ Erro: {str(e)}")
+        print(f"\n❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
 

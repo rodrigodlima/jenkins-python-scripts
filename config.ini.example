@@ -1,0 +1,31 @@
+# Arquivo de configuração para os scanners Jenkins/Git
+# Copie este arquivo para 'config.ini' e preencha com suas credenciais
+
+[jenkins]
+# URL do servidor Jenkins (sem barra no final)
+url = https://jenkins.sua-empresa.com
+
+# Usuário do Jenkins
+username = seu_usuario
+
+# Token de API do Jenkins
+# Para gerar: Jenkins > Seu Usuário > Configure > API Token
+token = seu_token_aqui
+
+[git]
+# Caminho base onde estão clonados os repositórios
+repos_path = /home/usuario/projetos
+
+[search]
+# Parâmetro padrão a buscar
+default_parameter = ECR_PATH
+
+# Padrões adicionais de busca (separados por vírgula)
+additional_patterns = AWS_REGION,DOCKER_REGISTRY,IMAGE_TAG
+
+[output]
+# Diretório para salvar os relatórios
+output_dir = ./reports
+
+# Formato de saída (txt, json, both)
+format = both
