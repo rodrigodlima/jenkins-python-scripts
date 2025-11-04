@@ -1,6 +1,6 @@
 # 🚀 Quick Start Guide - Jenkins Complete Scanner v2.0
 
-## ✨ Three Simple Steps
+## ⚡ Quick Setup
 
 ### Step 1: Install Dependencies
 ```bash
@@ -9,12 +9,15 @@ pip install requests
 
 ### Step 2: Run Complete Scan
 ```bash
+# NO Git repositories required! Works immediately.
 python complete_scanner.py \
     --jenkins-url https://jenkins.company.com \
     --username YOUR_USERNAME \
     --token YOUR_API_TOKEN \
     --parameters ECR_PATH AWS_REGION
 ```
+
+**Note:** Git repositories are **optional**. See "Git Repositories" section below.
 
 ### Step 3: View Results
 ```bash
@@ -109,7 +112,59 @@ python3 -m http.server 8000
 
 ---
 
+## 📁 Git Repositories (Optional)
+
+### Do I Need Them?
+
+**Most cases: NO!** The scanner works perfectly without Git repos.
+
+**Clone repos only if:**
+- You have many "Pipeline from SCM" jobs
+- You want to analyze Jenkinsfiles from Git
+- You need complete parameter analysis
+
+### Without Git Repos (Default - Recommended)
+```bash
+python complete_scanner.py \
+    --jenkins-url https://jenkins.company.com \
+    --username admin \
+    --token abc123 \
+    --parameters ECR_PATH
+```
+
+**What you get:**
+- ✅ All job configs exported
+- ✅ Full analysis of inline Pipeline Scripts
+- ✅ Git URLs for Pipeline from SCM jobs
+- ⚠️ Can't read Jenkinsfiles from SCM
+
+### With Git Repos (Optional - Enhanced)
+```bash
+# 1. Clone repos first
+mkdir ~/repos
+git clone https://git.company.com/project1.git ~/repos/project1
+
+# 2. Run with Git support
+python complete_scanner.py \
+    --jenkins-url https://jenkins.company.com \
+    --username admin \
+    --token abc123 \
+    --git-repos-path ~/repos \
+    --parameters ECR_PATH
+```
+
+**Additional benefits:**
+- ✅ Reads and analyzes Jenkinsfiles
+- ✅ Complete parameter analysis
+- ✅ Best for thorough audits
+
+**📖 For complete guide, see:** `GIT_REPOS_GUIDE.md`
+
+---
+
 ## 📝 Configuration File (Optional)
+
+### Option 1: Config File
 
 If you don't want to pass credentials every time:
 
@@ -135,6 +190,38 @@ default_parameter = ECR_PATH
 # 3. Run without arguments
 python complete_scanner.py
 ```
+
+### Option 2: Environment Variables (Recommended for Scripts)
+
+Export variables in your terminal:
+
+```bash
+# Set environment variables
+export JENKINS_URL="https://jenkins.company.com"
+export JENKINS_USER="your_username"
+export JENKINS_TOKEN="your_api_token"
+
+# Use in commands
+python complete_scanner.py \
+    --jenkins-url $JENKINS_URL \
+    --username $JENKINS_USER \
+    --token $JENKINS_TOKEN \
+    --parameters ECR_PATH
+```
+
+**For permanent setup (Linux/Mac):**
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+echo 'export JENKINS_USER="your_username"' >> ~/.bashrc
+echo 'export JENKINS_TOKEN="your_token"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**See ENVIRONMENT_VARIABLES.md for complete guide including:**
+- Secure .env file method
+- Docker integration
+- CI/CD integration (GitHub Actions, GitLab CI, Jenkins)
+- Secrets management (AWS, Vault)
 
 ---
 

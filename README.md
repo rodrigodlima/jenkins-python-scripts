@@ -17,6 +17,7 @@ Complete suite to audit, export and share Jenkins analyses.
 ### One command does EVERYTHING:
 
 ```bash
+# NO Git repositories needed! Works out of the box.
 python complete_scanner.py \
     --jenkins-url https://jenkins.company.com \
     --username admin \
@@ -56,10 +57,51 @@ jenkins_scan_results/20241104_143022/
 |------|---------|
 | **`README_FIRST.txt`** ⭐ | Quick start instructions |
 | `WHATS_NEW.md` | New features in v2.0 |
-| `EXPORT_SCAN_SHARE_GUIDE.md` | Complete guide |
-| `ARCHITECTURE_GUIDE.md` | Technical decisions |
-| `QUICK_DECISION_GUIDE.md` | Which scanner to use? |
-| `EXAMPLES.md` | Practical examples |
+| `GIT_REPOS_GUIDE.md` | When do you need Git repos? |
+| `ENVIRONMENT_VARIABLES.md` | Complete env vars setup |
+| `QUICK_START_GUIDE.md` | Detailed tutorial |
+
+---
+
+## 📁 Do I Need Git Repositories?
+
+### Short Answer: **NO!** (But they help for certain job types)
+
+**Without Git repos (default):**
+```bash
+python complete_scanner.py \
+    --jenkins-url https://jenkins.company.com \
+    --username admin \
+    --token abc123 \
+    --parameters ECR_PATH
+```
+- ✅ Works perfectly for most cases
+- ✅ Full analysis of "Pipeline Script" (inline) jobs
+- ⚠️ Limited analysis of "Pipeline from SCM" jobs
+
+**With Git repos (optional):**
+```bash
+# Clone repos first
+mkdir ~/repos
+git clone https://git.company.com/project1.git ~/repos/project1
+
+# Run with Git support
+python complete_scanner.py \
+    --jenkins-url https://jenkins.company.com \
+    --username admin \
+    --token abc123 \
+    --git-repos-path ~/repos \
+    --parameters ECR_PATH
+```
+- ✅ Complete analysis of ALL job types
+- ✅ Reads and analyzes Jenkinsfiles from Git
+- ✅ Best for thorough audits
+
+**📖 See `GIT_REPOS_GUIDE.md` for:**
+- When to clone repos
+- How to clone efficiently
+- Performance impact
+- Decision matrix
 
 ---
 
@@ -158,18 +200,26 @@ Structured data for:
 
 ```bash
 # 1. Extract the ZIP
-unzip jenkins-complete-scanner-v2.0.zip
+unzip jenkins-complete-scanner-v2.0-EN.zip
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure (optional)
+# 3. Configure credentials (choose one method)
+
+# Method A: Config file (optional)
 cp config.ini.example config.ini
 nano config.ini
+
+# Method B: Environment variables (recommended for scripts)
+export JENKINS_USER="your_username"
+export JENKINS_TOKEN="your_api_token"
 
 # 4. Run
 python complete_scanner.py --help
 ```
+
+**📖 For detailed environment variables setup, see:** `ENVIRONMENT_VARIABLES.md`
 
 ---
 

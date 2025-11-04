@@ -19,7 +19,7 @@ As requested:
 1. Install dependencies:
    pip install requests
 
-2. Run complete scan:
+2. Run complete scan (NO Git repos needed!):
    python complete_scanner.py \
        --jenkins-url https://jenkins.company.com \
        --username YOUR_USERNAME \
@@ -28,6 +28,10 @@ As requested:
 
 3. Open HTML report:
    Navigate to: jenkins_scan_results/TIMESTAMP/reports/report.html
+
+Note: Git repos are OPTIONAL. Only needed if you have many
+"Pipeline from SCM" jobs and want to analyze Jenkinsfiles.
+See GIT_REPOS_GUIDE.md for details.
    
 4. (Optional) Create ZIP to share:
    python share_results.py \
@@ -123,11 +127,24 @@ Option 4 - Temporary HTTP server:
 
 ⚙️ CONFIGURATION (Optional)
 
-If you don't want to pass credentials every time:
-
+Option 1 - Config File:
 1. cp config.ini.example config.ini
 2. Edit config.ini with your credentials
 3. Run without arguments: python complete_scanner.py
+
+Option 2 - Environment Variables:
+1. Export variables:
+   export JENKINS_USER="your_username"
+   export JENKINS_TOKEN="your_api_token"
+   
+2. Use in commands:
+   python complete_scanner.py \
+       --jenkins-url https://jenkins.company.com \
+       --username $JENKINS_USER \
+       --token $JENKINS_TOKEN \
+       --parameters ECR_PATH
+
+See ENVIRONMENT_VARIABLES.md for complete guide
 
 ═══════════════════════════════════════════════════════════════
 
