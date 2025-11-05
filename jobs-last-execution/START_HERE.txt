@@ -1,0 +1,63 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║        🚀 JENKINS INACTIVE JOBS ANALYZER                         ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+✅ What this script does:
+   • Analyzes ALL Jenkins jobs (including folders)
+   • Identifies jobs not executed for 6+ months
+   • Identifies jobs never executed
+   • Identifies jobs with last failure 6+ months ago
+   • Generates reports in HTML, CSV, and JSON
+
+📁 FILES INCLUDED:
+   ├── jenkins_inactive_jobs_analyzer.py  (Main script)
+   ├── requirements.txt                   (Dependencies)
+   ├── run_analyzer.sh                    (Helper script)
+   ├── .env.example                       (Configuration template)
+   ├── README.md                          (Complete documentation)
+   └── QUICKSTART.md                      (Quick start guide)
+
+🚀 QUICK START (3 STEPS):
+
+   1. Install dependencies:
+      pip install -r requirements.txt
+
+   2. Configure credentials:
+      cp .env.example .env
+      # Edit .env file with your credentials
+
+   3. Run the script:
+      ./run_analyzer.sh
+      # or
+      python3 jenkins_inactive_jobs_analyzer.py
+
+📊 GENERATED REPORTS:
+   • HTML: Visual interactive report (RECOMMENDED!)
+   • CSV: For Excel/LibreOffice analysis
+   • JSON: For programmatic processing
+
+⚙️  CONFIGURATION:
+   You need to provide:
+   • Jenkins URL (e.g., https://jenkins.company.com)
+   • Jenkins username
+   • API token (see README.md for how to obtain)
+
+📖 DOCUMENTATION:
+   • README.md - Complete detailed documentation
+   • QUICKSTART.md - 5-minute tutorial
+
+🔒 SECURITY:
+   • NEVER commit .env file to Git
+   • Use tokens with minimal permissions (read-only)
+   • Revoke unused tokens regularly
+
+💡 TIP:
+   Start by reading QUICKSTART.md for quick setup,
+   then explore README.md for advanced features!
+
+═══════════════════════════════════════════════════════════════════
+             Developed for efficient Jenkins management
+                         Happy analyzing! 🎉
+═══════════════════════════════════════════════════════════════════
