@@ -43,20 +43,59 @@ class JenkinsInactiveJobsAnalyzer:
                     jobs.append(job)
                     
         except Exception as e:
-            print(f"⚠️  Error getting jobs from {folder_path}: {e}")
+            print(f"Warning: Error getting jobs from {folder_path}: {e}")
             
         return jobs
     
     def get_job_details(self, job_url: str) -> Optional[Dict]:
-        api_url = f"{job_url}api/json?tree=name,fullName,url,lastBuild[number,timestamp,result],lastSuccessfulBuild[timestamp],lastFailedBuild[timestamp],lastCompletedBuild[timestamp]"
-        
+        api_url = f"{job_url}api/json?tree=name,fullName,url,lastBuild[number,timestamp,result],lastSuccessfulBuild[timestamp],lastFailedBuild[timestamp],lastCompletedBuild[timestamp],buildDiscarder[daysToKeepStr,numToKeepStr,artifactDaysToKeepStr,artifactNumToKeepStr]"
+
         try:
             response = self.session.get(api_url, timeout=30)
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            print(f"⚠️  Error getting job details from {job_url}: {e}")
+            print(f"Warning: Error getting job details from {job_url}: {e}")
             return None
+
+    def get_job_size(self, job_url: str) -> str:
+        """Get the disk size of a job by checking its directory"""
+        try:
+            # Try to get job size via Jenkins API (workspace size)
+            workspace_url = f"{job_url}api/json?tree=builds[number]{{0,1}}"
+            response = self.session.get(workspace_url, timeout=10)
+            response.raise_for_status()
+
+            # Attempt to get disk usage from Jenkins disk-usage plugin if available
+            disk_usage_url = f"{job_url}api/json?tree=diskUsage[buildRecordUsage,jobUsage,slaveWorkspaceUsage]"
+            try:
+                disk_response = self.session.get(disk_usage_url, timeout=10)
+                if disk_response.status_code == 200:
+                    disk_data = disk_response.json()
+                    if 'diskUsage' in disk_data:
+                        usage = disk_data['diskUsage']
+                        total_bytes = 0
+                        if 'buildRecordUsage' in usage:
+                            total_bytes += usage['buildRecordUsage']
+                        if 'jobUsage' in usage:
+                            total_bytes += usage['jobUsage']
+                        if 'slaveWorkspaceUsage' in usage:
+                            total_bytes += usage['slaveWorkspaceUsage']
+                        return self._format_size(total_bytes)
+            except:
+                pass
+
+            return "N/A"
+        except Exception as e:
+            return "N/A"
+
+    def _format_size(self, bytes_size: int) -> str:
+        """Format bytes to human readable format"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if bytes_size < 1024.0:
+                return f"{bytes_size:.2f} {unit}"
+            bytes_size /= 1024.0
+        return f"{bytes_size:.2f} PB"
     
     def timestamp_to_datetime(self, timestamp: Optional[int]) -> Optional[datetime]:
         if timestamp:
@@ -66,62 +105,87 @@ class JenkinsInactiveJobsAnalyzer:
     def analyze_job(self, job_details: Dict) -> Dict:
         job_name = job_details.get('fullName', job_details.get('name', 'Unknown'))
         job_url = job_details.get('url', '')
-        
+
         last_build = job_details.get('lastBuild')
+        last_successful_build = job_details.get('lastSuccessfulBuild')
         last_failed_build = job_details.get('lastFailedBuild')
         last_completed_build = job_details.get('lastCompletedBuild')
-        
+
         last_build_date = None
+        last_success_date = None
         last_failure_date = None
-        
+
         if last_build:
             last_build_date = self.timestamp_to_datetime(last_build.get('timestamp'))
         elif last_completed_build:
             last_build_date = self.timestamp_to_datetime(last_completed_build.get('timestamp'))
-            
+
+        if last_successful_build:
+            last_success_date = self.timestamp_to_datetime(last_successful_build.get('timestamp'))
+
         if last_failed_build:
             last_failure_date = self.timestamp_to_datetime(last_failed_build.get('timestamp'))
-        
+
+        # Get retention period
+        build_discarder = job_details.get('buildDiscarder', {})
+        retention_period = "Not Set"
+        if build_discarder:
+            days = build_discarder.get('daysToKeepStr', '')
+            num = build_discarder.get('numToKeepStr', '')
+            if days or num:
+                parts = []
+                if days:
+                    parts.append(f"{days} days")
+                if num:
+                    parts.append(f"{num} builds")
+                retention_period = ", ".join(parts)
+
+        # Get job size
+        job_size = self.get_job_size(job_url)
+
         no_execution_6months = False
         no_failure_6months = False
         never_executed = False
-        
+
         if last_build_date is None:
             never_executed = True
             no_execution_6months = True
         elif last_build_date < self.six_months_ago:
             no_execution_6months = True
-        
+
         if last_failure_date and last_failure_date < self.six_months_ago:
             no_failure_6months = True
-        
+
         days_since_execution = None
         days_since_failure = None
-        
+
         if last_build_date:
             days_since_execution = (datetime.now() - last_build_date).days
-            
+
         if last_failure_date:
             days_since_failure = (datetime.now() - last_failure_date).days
-        
+
         return {
             'job_name': job_name,
             'job_url': job_url,
             'last_build_date': last_build_date,
+            'last_success_date': last_success_date,
             'last_failure_date': last_failure_date,
             'days_since_execution': days_since_execution,
             'days_since_failure': days_since_failure,
+            'retention_period': retention_period,
+            'job_size': job_size,
             'no_execution_6months': no_execution_6months,
             'no_failure_6months': no_failure_6months,
             'never_executed': never_executed
         }
     
     def analyze_all_jobs(self) -> Dict[str, List[Dict]]:
-        print("🔍 Fetching all Jenkins jobs...")
+        print("Fetching all Jenkins jobs...")
         all_jobs = self.get_all_jobs()
-        print(f"✅ Found {len(all_jobs)} jobs")
-        
-        print("\n📊 Analyzing jobs...")
+        print(f"Found {len(all_jobs)} jobs")
+
+        print("\nAnalyzing jobs...")
         
         results = {
             'no_execution_6months': [],
@@ -145,19 +209,17 @@ class JenkinsInactiveJobsAnalyzer:
                     
                 if analysis['no_failure_6months']:
                     results['no_failure_6months'].append(analysis)
-        
-        print("\n✅ Analysis completed!")
+
+        print("\nAnalysis completed!")
         return results
     
     def generate_report(self, results: Dict[str, List[Dict]], output_dir: str = "jenkins_reports"):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        self._save_json_report(results, output_path, timestamp)
+
         self._save_csv_reports(results, output_path, timestamp)
-        self._save_html_report(results, output_path, timestamp)
         self._print_summary(results)
     
     def _save_json_report(self, results: Dict, output_path: Path, timestamp: str):
@@ -176,47 +238,29 @@ class JenkinsInactiveJobsAnalyzer:
         
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(json_results, f, indent=2, ensure_ascii=False)
-        
-        print(f"\n📄 JSON report saved: {json_file}")
+
+        print(f"\nJSON report saved: {json_file}")
     
     def _save_csv_reports(self, results: Dict, output_path: Path, timestamp: str):
-        csv_file = output_path / f"jobs_no_execution_6months_{timestamp}.csv"
+        csv_file = output_path / f"jobs_report_{timestamp}.csv"
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['Job Name', 'URL', 'Last Execution', 'Days Since Execution', 'Status'])
-            
-            for job in results['no_execution_6months'] + results['never_executed']:
-                status = 'Never executed' if job['never_executed'] else 'Inactive 6+ months'
-                last_exec = job['last_build_date'].strftime('%Y-%m-%d') if job['last_build_date'] else 'Never'
-                days = job['days_since_execution'] if job['days_since_execution'] else 'N/A'
-                
+            writer.writerow(['Job Name', 'URL', 'Last Success', 'Last Run', 'Retention Period', 'Job Size'])
+
+            for job in results['all_analyzed']:
+                last_success = job['last_success_date'].strftime('%Y-%m-%d %H:%M:%S') if job['last_success_date'] else 'Never'
+                last_run = job['last_build_date'].strftime('%Y-%m-%d %H:%M:%S') if job['last_build_date'] else 'Never'
+
                 writer.writerow([
                     job['job_name'],
                     job['job_url'],
-                    last_exec,
-                    days,
-                    status
+                    last_success,
+                    last_run,
+                    job['retention_period'],
+                    job['job_size']
                 ])
-        
-        print(f"📄 CSV report (no execution) saved: {csv_file}")
-        
-        csv_file_failures = output_path / f"jobs_no_failure_6months_{timestamp}.csv"
-        with open(csv_file_failures, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(['Job Name', 'URL', 'Last Failure', 'Days Since Failure'])
-            
-            for job in results['no_failure_6months']:
-                last_fail = job['last_failure_date'].strftime('%Y-%m-%d') if job['last_failure_date'] else 'Never'
-                days = job['days_since_failure'] if job['days_since_failure'] else 'N/A'
-                
-                writer.writerow([
-                    job['job_name'],
-                    job['job_url'],
-                    last_fail,
-                    days
-                ])
-        
-        print(f"📄 CSV report (old failures) saved: {csv_file_failures}")
+
+        print(f"CSV report saved: {csv_file}")
     
     def _save_html_report(self, results: Dict, output_path: Path, timestamp: str):
         html_file = output_path / f"inactive_jobs_report_{timestamp}.html"
@@ -336,7 +380,7 @@ class JenkinsInactiveJobsAnalyzer:
 </head>
 <body>
     <div class="container">
-        <h1>📊 Jenkins - Inactive Jobs Analysis</h1>
+        <h1>Jenkins - Inactive Jobs Analysis</h1>
         <p class="timestamp">Generated on: {datetime.now().strftime('%Y-%m-%d at %H:%M:%S')}</p>
         
         <div class="summary">
@@ -357,8 +401,9 @@ class JenkinsInactiveJobsAnalyzer:
                 <p class="number">{len(results['no_failure_6months'])}</p>
             </div>
         </div>
-        
-        <h2>🔴 Jobs Not Executed for 6+ Months</h2>
+
+
+        <h2>Jobs Not Executed for 6+ Months</h2>
         <table>
             <thead>
                 <tr>
@@ -372,8 +417,8 @@ class JenkinsInactiveJobsAnalyzer:
 {self._generate_inactive_jobs_rows(results)}
             </tbody>
         </table>
-        
-        <h2>⚠️ Jobs with Last Failure 6+ Months Ago</h2>
+
+        <h2>Jobs with Last Failure 6+ Months Ago</h2>
         <table>
             <thead>
                 <tr>
@@ -427,7 +472,7 @@ class JenkinsInactiveJobsAnalyzer:
     
     def _print_summary(self, results: Dict):
         print("\n" + "="*60)
-        print("📊 ANALYSIS SUMMARY")
+        print("ANALYSIS SUMMARY")
         print("="*60)
         print(f"Total jobs analyzed: {len(results['all_analyzed'])}")
         print(f"Inactive jobs (6+ months): {len(results['no_execution_6months'])}")
@@ -493,25 +538,25 @@ Usage examples:
     token = args.token or os.getenv('JENKINS_TOKEN')
     
     if not all([jenkins_url, username, token]):
-        print("❌ Error: Jenkins URL, username, and token are required")
+        print("Error: Jenkins URL, username, and token are required")
         print("\nProvide credentials via:")
         print("1. Parameters: --jenkins-url, --username, --token")
         print("2. Environment variables: JENKINS_URL, JENKINS_USER, JENKINS_TOKEN")
         return
-    
+
     print("="*60)
-    print("🚀 Jenkins Inactive Jobs Analyzer")
+    print("Jenkins Inactive Jobs Analyzer")
     print("="*60)
     print(f"Jenkins URL: {jenkins_url}")
     print(f"Username: {username}")
     print(f"Reports will be saved to: {args.output_dir}")
     print("="*60)
-    
+
     analyzer = JenkinsInactiveJobsAnalyzer(jenkins_url, username, token)
     results = analyzer.analyze_all_jobs()
     analyzer.generate_report(results, args.output_dir)
-    
-    print("\n✅ Analysis completed successfully!")
+
+    print("\nAnalysis completed successfully!")
 
 
 if __name__ == '__main__':
