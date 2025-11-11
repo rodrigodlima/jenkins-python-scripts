@@ -12,6 +12,7 @@ from pathlib import Path
 import argparse
 from typing import List, Dict, Optional
 import csv
+import xml.etree.ElementTree as ET
 
 
 class JenkinsInactiveJobsAnalyzer:
@@ -48,7 +49,7 @@ class JenkinsInactiveJobsAnalyzer:
         return jobs
     
     def get_job_details(self, job_url: str) -> Optional[Dict]:
-        api_url = f"{job_url}api/json?tree=name,fullName,url,lastBuild[number,timestamp,result],lastSuccessfulBuild[timestamp],lastFailedBuild[timestamp],lastCompletedBuild[timestamp],buildDiscarder[daysToKeepStr,numToKeepStr,artifactDaysToKeepStr,artifactNumToKeepStr]"
+        api_url = f"{job_url}api/json?tree=name,fullName,url,lastBuild[number,timestamp,result],lastSuccessfulBuild[timestamp],lastFailedBuild[timestamp],lastCompletedBuild[timestamp]"
 
         try:
             response = self.session.get(api_url, timeout=30)
@@ -58,14 +59,47 @@ class JenkinsInactiveJobsAnalyzer:
             print(f"Warning: Error getting job details from {job_url}: {e}")
             return None
 
+    def get_job_config(self, job_url: str) -> Optional[str]:
+        """Get job configuration XML"""
+        try:
+            config_url = f"{job_url}config.xml"
+            response = self.session.get(config_url, timeout=30)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            return None
+
+    def get_retention_period_from_config(self, config_xml: str) -> str:
+        """Extract retention period from job config XML"""
+        if not config_xml:
+            return "Not Set"
+
+        try:
+            root = ET.fromstring(config_xml)
+
+            # Try to find buildDiscarder or logRotator
+            discarder = root.find('.//buildDiscarder') or root.find('.//logRotator')
+
+            if discarder is not None:
+                days_to_keep = discarder.find('daysToKeepStr')
+                num_to_keep = discarder.find('numToKeepStr')
+
+                parts = []
+                if days_to_keep is not None and days_to_keep.text and days_to_keep.text.strip():
+                    parts.append(f"{days_to_keep.text} days")
+                if num_to_keep is not None and num_to_keep.text and num_to_keep.text.strip():
+                    parts.append(f"{num_to_keep.text} builds")
+
+                if parts:
+                    return ", ".join(parts)
+
+            return "Not Set"
+        except Exception as e:
+            return "Not Set"
+
     def get_job_size(self, job_url: str) -> str:
         """Get the disk size of a job by checking its directory"""
         try:
-            # Try to get job size via Jenkins API (workspace size)
-            workspace_url = f"{job_url}api/json?tree=builds[number]{{0,1}}"
-            response = self.session.get(workspace_url, timeout=10)
-            response.raise_for_status()
-
             # Attempt to get disk usage from Jenkins disk-usage plugin if available
             disk_usage_url = f"{job_url}api/json?tree=diskUsage[buildRecordUsage,jobUsage,slaveWorkspaceUsage]"
             try:
@@ -126,19 +160,9 @@ class JenkinsInactiveJobsAnalyzer:
         if last_failed_build:
             last_failure_date = self.timestamp_to_datetime(last_failed_build.get('timestamp'))
 
-        # Get retention period
-        build_discarder = job_details.get('buildDiscarder', {})
-        retention_period = "Not Set"
-        if build_discarder:
-            days = build_discarder.get('daysToKeepStr', '')
-            num = build_discarder.get('numToKeepStr', '')
-            if days or num:
-                parts = []
-                if days:
-                    parts.append(f"{days} days")
-                if num:
-                    parts.append(f"{num} builds")
-                retention_period = ", ".join(parts)
+        # Get retention period from config.xml
+        config_xml = self.get_job_config(job_url)
+        retention_period = self.get_retention_period_from_config(config_xml)
 
         # Get job size
         job_size = self.get_job_size(job_url)
