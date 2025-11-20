@@ -1,0 +1,44 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:latest-jdk21
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./jobs:/var/jenkins_home/jobs
+      - .:/workspace
+      - ./setup-jenkins-simple.groovy:/var/jenkins_home/init.groovy.d/setup-jenkins.groovy
+      - ./scriptApproval.xml:/var/jenkins_home/scriptApproval.xml
+    environment:
+      - JENKINS_OPTS=--httpPort=8080
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - JENKINS_INSTALL_PLUGINS=git,github,workflow-aggregator,pipeline-stage-view,maven-plugin
+      - MAVEN_OPTS=-Dmaven.repo.local=/var/jenkins_home/.m2/repository
+      - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    user: root
+    command: >
+      bash -c "
+      git config --system http.sslVerify false &&
+      git config --system user.name 'Jenkins' &&
+      git config --system user.email 'jenkins@localhost' &&
+      git config --system init.defaultBranch main &&
+      git config --system safe.directory '*' &&
+      apt-get update && apt-get install -y maven python3 python3-pip python3-venv nodejs npm &&
+      echo 'Node.js version:' && node --version &&
+      echo 'NPM version:' && npm --version &&
+      ln -sf /usr/bin/python3 /usr/bin/python &&
+      pip install --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r /workspace/requirements.txt &&      jenkins-plugin-cli -f /workspace/plugins.txt &&
+      mkdir -p /var/jenkins_home/init.groovy.d &&
+      echo 'jenkins.install.runSetupWizard=false' > /var/jenkins_home/jenkins.install.UpgradeWizard.state &&
+      echo 'jenkins.install.runSetupWizard=false' > /var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion &&
+      touch /var/jenkins_home/.jenkins-cli &&
+      chown -R jenkins:jenkins /var/jenkins_home &&
+      /usr/local/bin/jenkins.sh
+      "
+volumes:
+  jenkins_home:
