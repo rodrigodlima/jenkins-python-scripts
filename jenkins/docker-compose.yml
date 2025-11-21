@@ -32,7 +32,7 @@ services:
       echo 'Node.js version:' && node --version &&
       echo 'NPM version:' && npm --version &&
       ln -sf /usr/bin/python3 /usr/bin/python &&
-      pip install --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r /workspace/requirements.txt &&      jenkins-plugin-cli -f /workspace/plugins.txt &&
+      pip install --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r /workspace/requirements.txt &&
       mkdir -p /var/jenkins_home/init.groovy.d &&
       echo 'jenkins.install.runSetupWizard=false' > /var/jenkins_home/jenkins.install.UpgradeWizard.state &&
       echo 'jenkins.install.runSetupWizard=false' > /var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion &&
