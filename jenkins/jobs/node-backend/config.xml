@@ -1,0 +1,79 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition>
+  <description>Node.js 22.12.0 application build job - Uses inline pipeline script with agent integration</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition">
+    <script><![CDATA[pipeline {
+    agent any
+
+    environment {
+        WORKSPACE_DIR = '/workspace'
+        WORKSPACE_APP_DIR = '/workspace/apps/node-backend'
+        VALIDATION_COMMAND = 'npm run test'
+        NODE_VERSION = '22.12.0'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                dir("${env.WORKSPACE_DIR}") {
+                    script {
+                        sh '''
+                            mkdir -p apps
+                            cd apps
+                            rm -rf node-backend
+                            git clone --verbose https://github.com/cireneuguilhermeteixeira/node-backend.git
+                            ls -la node-backend/
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Setup and Test') {
+            steps {
+                dir("${env.WORKSPACE_APP_DIR}") {
+                    script {
+                        sh '''
+                            # Verify Node.js version
+                            node --version
+                            npm --version
+                            npm config set strict-ssl false
+                            # Install dependencies
+                            npm install
+
+                            # Run tests
+                            npm run test
+                        '''
+                    }
+                }
+            }
+            post {
+                always {
+                    dir("${env.WORKSPACE_DIR}") {
+                        script {
+                            def jobOutput = currentBuild.rawBuild.getLog(1000).join('\n')
+                            def cleanOutput = jobOutput.replaceAll(/\x1B\[[;0-9]*[a-zA-Z]/, '').replaceAll(/\[\[0;?[0-9;]*m/, '')
+
+                            writeFile file: '/tmp/job_output.txt', text: cleanOutput
+                        }
+                    }
+                }
+                failure {
+                    dir("${env.WORKSPACE_DIR}") {
+                        script {
+                            sh "echo 'Build failed. Calling agent to fix the issues...'"
+                            sh "chmod +x agent.py"
+                            sh "python -u agent.py ${WORKSPACE_APP_DIR} /tmp/job_output.txt '${env.VALIDATION_COMMAND}'"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}]]></script>
+    <sandbox>true</sandbox>
+  </definition>
+  <disabled>false</disabled>
+</flow-definition>
